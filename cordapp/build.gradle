@@ -57,6 +57,7 @@ dependencies {
     // CorDapp dependencies
     // Specify your CorDapp's dependencies below, including dependent CorDapps.
     cordapp project(":cordapp-contracts-states")
+    cordapp "$cordite_release_group:cordite-commons:$cordite_version"
     cordapp "$cordite_release_group:cordite-cordapp:$cordite_version"
     cordapp "$cordite_release_group:dgl-cordapp:$cordite_version"
     cordapp "$cordite_release_group:dgl-contracts-states:$cordite_version"
