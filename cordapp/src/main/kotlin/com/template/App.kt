@@ -2,10 +2,13 @@ package com.template
 
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Command
+import net.corda.core.contracts.StateAndContract
+import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.serialization.SerializationWhitelist
+import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import net.corda.webserver.services.WebServerPluginRegistry
@@ -47,16 +50,52 @@ class IOUFlow(val iouValue: Int, val otherParty: Party) : FlowLogic<Unit>() {
     override fun call() {
         val notary = serviceHub.networkMapCache.notaryIdentities[0]
 
-        val outputState = IOUState(iouValue, ourIdentity, otherParty)
-        val cmd = Command(IOUContract.Commands.Action(), ourIdentity.owningKey)
-
         val txBuilder = TransactionBuilder(notary = notary)
-                .addOutputState(outputState, IOU_CONTRACT_ID)
-                .addCommand(cmd)
+        val outputState = IOUState(iouValue, ourIdentity, otherParty)
+        val outputContractAndState = StateAndContract(outputState, IOU_CONTRACT_ID)
+        val cmd = Command(IOUContract.Create(), listOf(ourIdentity.owningKey, otherParty.owningKey))
 
+        txBuilder.withItems(outputContractAndState, cmd)
+
+        // verify
+        txBuilder.verify(serviceHub)
+
+        // sign the tx
         val signedTx = serviceHub.signInitialTransaction(txBuilder)
 
-        subFlow(FinalityFlow(signedTx))
+        // create a session with the other party
+        val otherPartySession = initiateFlow(otherParty)
+
+        // obtaining the signature of the other party
+        val fullySignedTx = subFlow(CollectSignaturesFlow(signedTx, listOf(otherPartySession), CollectSignaturesFlow.tracker()))
+
+        // finalize the transaction
+        subFlow(FinalityFlow(fullySignedTx))
+    }
+
+}
+
+@InitiatedBy(IOUFlow::class)
+class IOUFlowResponder(val otherPartySession: FlowSession) : FlowLogic<Unit>() {
+
+    @Suspendable
+    override fun call() {
+        val signedTransaction = object : SignTransactionFlow(otherPartySession, SignTransactionFlow.tracker()) {
+
+            // add additional checks to the contract
+            // what if we don't want to work with a certain party ... or we don't want the value to be too high
+            // we will only sign if the contract is valid and these additional checks ...
+            override fun checkTransaction(stx: SignedTransaction) = requireThat {
+                val output = stx.tx.outputs.single().data
+                "This must be an IOU transaction." using (output is IOUState)
+
+                val iou = output as IOUState
+                "The IOU's value can't be too high." using (iou.value <= 100)
+            }
+
+        }
+
+        subFlow(signedTransaction)
     }
 
 }
