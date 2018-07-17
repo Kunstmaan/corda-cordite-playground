@@ -1,9 +1,13 @@
 package com.template
 
 import co.paralleluniverse.fibers.Suspendable
+import net.corda.core.contracts.Command
 import net.corda.core.flows.*
+import net.corda.core.identity.Party
 import net.corda.core.messaging.CordaRPCOps
 import net.corda.core.serialization.SerializationWhitelist
+import net.corda.core.transactions.TransactionBuilder
+import net.corda.core.utilities.ProgressTracker
 import net.corda.webserver.services.WebServerPluginRegistry
 import java.util.function.Function
 import javax.ws.rs.GET
@@ -17,6 +21,7 @@ import javax.ws.rs.core.Response
 // *****************
 @Path("template")
 class TemplateApi(val rpcOps: CordaRPCOps) {
+
     // Accessible at /api/template/templateGetEndpoint.
     @GET
     @Path("templateGetEndpoint")
@@ -24,32 +29,43 @@ class TemplateApi(val rpcOps: CordaRPCOps) {
     fun templateGetEndpoint(): Response {
         return Response.ok("Template GET endpoint.").build()
     }
+
 }
 
 // *********
 // * Flows *
 // *********
+
 @InitiatingFlow
 @StartableByRPC
-class Initiator : FlowLogic<Unit>() {
-    @Suspendable
-    override fun call() {
-        // Flow implementation goes here
-    }
-}
+class IOUFlow(val iouValue: Int, val otherParty: Party) : FlowLogic<Unit>() {
 
-@InitiatedBy(Initiator::class)
-class Responder(val counterpartySession: FlowSession) : FlowLogic<Unit>() {
+    /** The progress tracker provides checkpoints indicating the progress of the flow to observers. */
+    override val progressTracker = ProgressTracker()
+
     @Suspendable
     override fun call() {
-        // Flow implementation goes here
+        val notary = serviceHub.networkMapCache.notaryIdentities[0]
+
+        val outputState = IOUState(iouValue, ourIdentity, otherParty)
+        val cmd = Command(IOUContract.Commands.Action(), ourIdentity.owningKey)
+
+        val txBuilder = TransactionBuilder(notary = notary)
+                .addOutputState(outputState, IOU_CONTRACT_ID)
+                .addCommand(cmd)
+
+        val signedTx = serviceHub.signInitialTransaction(txBuilder)
+
+        subFlow(FinalityFlow(signedTx))
     }
+
 }
 
 // ***********
 // * Plugins *
 // ***********
 class TemplateWebPlugin : WebServerPluginRegistry {
+
     // A list of lambdas that create objects exposing web JAX-RS REST APIs.
     override val webApis: List<Function<CordaRPCOps, out Any>> = listOf(Function(::TemplateApi))
     //A list of directories in the resources directory that will be served by Jetty under /web.
@@ -58,11 +74,14 @@ class TemplateWebPlugin : WebServerPluginRegistry {
         // This will serve the templateWeb directory in resources to /web/template
         "template" to javaClass.classLoader.getResource("templateWeb").toExternalForm()
     )
+
 }
 
 // Serialization whitelist.
 class TemplateSerializationWhitelist : SerializationWhitelist {
+
     override val whitelist: List<Class<*>> = listOf(TemplateData::class.java)
+
 }
 
 // This class is not annotated with @CordaSerializable, so it must be added to the serialization whitelist, above, if
