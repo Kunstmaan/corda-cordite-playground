@@ -1,11 +1,9 @@
 package com.template
 
 import io.cordite.dgl.corda.token.issuedBy
-import net.corda.core.contracts.TransactionVerificationException
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.utilities.days
 import net.corda.finance.DOLLARS
-import net.corda.finance.`issued by`
 import net.corda.finance.contracts.asset.CASH
 import net.corda.finance.contracts.asset.Cash
 import net.corda.testing.core.ALICE_NAME

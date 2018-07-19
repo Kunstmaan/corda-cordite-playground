@@ -127,7 +127,7 @@ class CommercialPaper : Contract {
                 to = paper.state.data.owner
         )
 
-        net.corda.finance.contracts.CommercialPaper
+        tx.addInputState(paper)
         tx.addCommand(Command(Commands.Redeem(), paper.state.data.owner.owningKey))
 
         return tx
