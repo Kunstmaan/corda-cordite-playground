@@ -1,7 +1,7 @@
 package com.template
 
-import io.bluebank.braid.corda.services.transaction
 import io.bluebank.braid.core.annotation.MethodDescription
+import io.cordite.commons.utils.transaction
 import net.corda.core.node.AppServiceHub
 import net.corda.core.node.services.Vault
 import rx.Observable
